@@ -53,8 +53,22 @@ jobs:
           Move-Item dist/VideoOCR package/VideoOCR
           Compress-Archive -Path package/VideoOCR -DestinationPath "VideoOCR-windows-x64-$env:RELEASE_TAG.zip"
           $hash = (Get-FileHash "VideoOCR-windows-x64-$env:RELEASE_TAG.zip" -Algorithm SHA256).Hash.ToLower()
+          $partSize = 20MB
+          $source = [System.IO.File]::OpenRead("VideoOCR-windows-x64-$env:RELEASE_TAG.zip")
+          $buffer = New-Object byte[] $partSize
+          $parts = @()
+          $index = 1
+          try {
+            while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) {
+              $partName = "VideoOCR-windows-x64-$env:RELEASE_TAG.zip.part{0:D3}" -f $index
+              $destination = [System.IO.File]::Create($partName)
+              try { $destination.Write($buffer, 0, $read) } finally { $destination.Dispose() }
+              $parts += "https://static.yaoonion.fun/$env:STATIC_PATH/$partName"
+              $index++
+            }
+          } finally { $source.Dispose() }
           "$hash  VideoOCR-windows-x64-$env:RELEASE_TAG.zip" | Set-Content SHA256SUMS.txt -NoNewline
-          @{ version = $env:RELEASE_TAG.TrimStart("v"); url = "https://static.yaoonion.fun/$env:STATIC_PATH/VideoOCR-windows-x64-$env:RELEASE_TAG.zip"; sha256 = $hash } | ConvertTo-Json | Set-Content latest.json
+          @{ version = $env:RELEASE_TAG.TrimStart("v"); parts = $parts; sha256 = $hash } | ConvertTo-Json | Set-Content latest.json
 
       - uses: actions/checkout@v4
         with:
@@ -65,10 +79,12 @@ jobs:
       - name: Publish static assets
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "static/$env:STATIC_PATH" | Out-Null
-          Copy-Item "VideoOCR-windows-x64-$env:RELEASE_TAG.zip" "static/$env:STATIC_PATH/"
-          Copy-Item SHA256SUMS.txt "static/$env:STATIC_PATH/"
-          Copy-Item latest.json "static/$env:STATIC_PATH/"
+          $publishDirectory = "static/$env:STATIC_PATH"
+          if (Test-Path $publishDirectory) { Remove-Item $publishDirectory -Recurse -Force }
+          New-Item -ItemType Directory -Force $publishDirectory | Out-Null
+          Copy-Item "VideoOCR-windows-x64-$env:RELEASE_TAG.zip.part*" $publishDirectory
+          Copy-Item SHA256SUMS.txt $publishDirectory
+          Copy-Item latest.json $publishDirectory
           Set-Location static
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

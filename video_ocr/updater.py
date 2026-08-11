@@ -27,9 +27,12 @@ def fetch_manifest(url: str = UPDATE_MANIFEST_URL) -> dict[str, str]:
     request = urllib.request.Request(url, headers={"User-Agent": f"VideoOCR/{__version__}"})
     with urllib.request.urlopen(request, timeout=10) as response:
         manifest = json.loads(response.read().decode("utf-8"))
-    required = {"version", "url", "sha256"}
-    if not required.issubset(manifest) or not manifest["url"].startswith("https://"):
+    required = {"version", "parts", "sha256"}
+    if not required.issubset(manifest) or not isinstance(manifest["parts"], list) or not manifest["parts"]:
         raise ValueError("更新清单格式无效。")
+    for part in manifest["parts"]:
+        if not isinstance(part, str) or not part.startswith("https://"):
+            raise ValueError("更新分片地址无效。")
     return manifest
 
 
@@ -60,15 +63,17 @@ class UpdateDownloadWorker(QThread):
         try:
             descriptor, archive_path = tempfile.mkstemp(prefix="video_ocr_update_", suffix=".zip")
             os.close(descriptor)
-            request = urllib.request.Request(self.manifest["url"], headers={"User-Agent": f"VideoOCR/{__version__}"})
-            with urllib.request.urlopen(request, timeout=30) as response, open(archive_path, "wb") as stream:
-                total = int(response.headers.get("Content-Length", 0))
-                downloaded = 0
-                while chunk := response.read(1024 * 1024):
-                    stream.write(chunk)
-                    downloaded += len(chunk)
-                    if total:
-                        self.progress_changed.emit(round(downloaded * 100 / total))
+            with open(archive_path, "wb") as stream:
+                for index, url in enumerate(self.manifest["parts"], start=1):
+                    request = urllib.request.Request(url, headers={"User-Agent": f"VideoOCR/{__version__}"})
+                    with urllib.request.urlopen(request, timeout=30) as response:
+                        total = int(response.headers.get("Content-Length", 0))
+                        downloaded = 0
+                        while chunk := response.read(1024 * 1024):
+                            stream.write(chunk)
+                            downloaded += len(chunk)
+                            if total:
+                                self.progress_changed.emit(round(((index - 1) + downloaded / total) * 100 / len(self.manifest["parts"])))
             hasher = hashlib.sha256()
             with open(archive_path, "rb") as stream:
                 while chunk := stream.read(1024 * 1024):

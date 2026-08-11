@@ -26,7 +26,7 @@ bin/
 
 ## 自动发布与更新
 
-推送与 [version.py](file:///d:/GitHub/tmp/video_ocr/version.py) 一致的标签（例如版本为 `0.1.0` 时推送 `v0.1.0`），会触发 GitHub Actions 构建 Windows x64 目录型应用包，并将 ZIP、校验文件及更新清单推送到 `SuperUseryjh/static` 的 `video-ocr/` 路径。对应下载与更新清单地址为 `https://static.yaoonion.fun/video-ocr/`。
+推送与 [version.py](file:///d:/GitHub/tmp/video_ocr/version.py) 一致的标签（例如版本为 `0.1.0` 时推送 `v0.1.0`），会触发 GitHub Actions 构建 Windows x64 目录型应用包。为兼容 Cloudflare 的 25 MB 静态文件限制，工作流会将更新 ZIP 自动分割为最大 20 MB 的分片，再将分片、校验文件及更新清单推送到 `SuperUseryjh/static` 的 `video-ocr/` 路径。每次发布会先清空该目录，因此仅保留最新版本的分片、`SHA256SUMS.txt` 与 `latest.json`。客户端按清单合并分片、校验 SHA-256 后再安装；对应更新清单地址为 `https://static.yaoonion.fun/video-ocr/latest.json`。
 
 在源仓库的 Actions Secrets 中配置 `STATIC_REPO_PAT`。该 PAT 只需对 `SuperUseryjh/static` 具有 Contents 读写权限；不要将 PAT 写入源码、工作流或客户端。客户端仅在打包后的 `.exe` 中自动检查更新，也可通过“检查更新”手动触发；下载包会进行 SHA-256 校验后再安装。
 
