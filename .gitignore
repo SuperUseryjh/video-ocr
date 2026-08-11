@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+ocr_results.csv
+clip.mp4
+bin/ffmpeg
+bin/ffmpeg.exe
